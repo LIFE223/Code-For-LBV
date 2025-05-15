@@ -71,16 +71,6 @@
     const ctx = canvas.getContext("2d");
     const scoreDisplay = document.getElementById("score");
 
-    // Fullscreen: Resize canvas to window dimensions.
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      // Adjust positions that depend on canvas dimensions.
-      aiX = canvas.width - paddleWidth - 20;
-    }
-    window.addEventListener("resize", resizeCanvas);
-    window.addEventListener("load", resizeCanvas);
-
     // Pong game variables.
     const paddleWidth = 10;
     const paddleHeight = 100;
@@ -88,22 +78,38 @@
     
     // Player paddle position.
     let playerX = 20;
-    // Initially setting player's vertical position in the middle.
-    let playerY = (canvas.height / 2) - (paddleHeight / 2);
+    let playerY = 0; // Will be set correctly after canvas resize.
     
     // AI paddle.
-    let aiX = canvas.width - paddleWidth - 20;
-    let aiY = (canvas.height / 2) - (paddleHeight / 2);
+    let aiX = 0; // Will be set correctly after canvas resize.
+    let aiY = 0;
     
     // Ball starting position and speed.
-    let ballX = canvas.width / 2;
-    let ballY = canvas.height / 2;
+    let ballX = 0;
+    let ballY = 0;
     let ballSpeedX = 6;
     let ballSpeedY = 3;
     
     let playerScore = 0;
     let aiScore = 0;
     
+    // Fullscreen: Resize canvas and update dependent variables.
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      
+      // Reset paddle positions.
+      playerY = (canvas.height / 2) - (paddleHeight / 2);
+      aiX = canvas.width - paddleWidth - 20;
+      aiY = (canvas.height / 2) - (paddleHeight / 2);
+      
+      // Reset ball position.
+      ballX = canvas.width / 2;
+      ballY = canvas.height / 2;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener("load", resizeCanvas);
+
     // Game Loop.
     function gameLoop() {
       update();
@@ -124,21 +130,31 @@
       // Check collision with player's paddle.
       if (ballX - ballRadius < playerX + paddleWidth &&
           ballY > playerY && ballY < playerY + paddleHeight) {
-        ballSpeedX = -ballSpeedX;
+        ballSpeedX = Math.abs(ballSpeedX); // Ensure ball goes right.
       }
       
       // Check collision with AI paddle.
       if (ballX + ballRadius > aiX &&
           ballY > aiY && ballY < aiY + paddleHeight) {
-        ballSpeedX = -ballSpeedX;
+        ballSpeedX = -Math.abs(ballSpeedX); // Ensure ball goes left.
       }
       
-      // Simple AI: Move AI paddle toward the ball.
-      let aiCenter = aiY + paddleHeight / 2;
-      let diff = ballY - aiCenter;
-      aiY += diff * 0.1;  // Tune this factor to adjust AI reaction
-
-      // Calculate scoring.
+      // AI Paddle Movement with errors:
+      // Calculate a random error offset between -10 and +10.
+      let errorMargin = (Math.random() * 20) - 10;
+      // Desired position is where the ball is, adjusted with the random error.
+      let desiredAIY = ballY - paddleHeight / 2 + errorMargin;
+      
+      if (ballX > canvas.width / 2) {
+        // When the ball is coming toward the AI, react with a moderate speed.
+        aiY += (desiredAIY - aiY) * 0.1;
+      } else {
+        // When the ball is on the player's side, slowly bring the AI paddle back to center.
+        let centerPosition = (canvas.height / 2) - (paddleHeight / 2);
+        aiY += (centerPosition - aiY) * 0.05;
+      }
+      
+      // Scoring conditions.
       if (ballX < 0) {
         aiScore++;
         resetBall();
@@ -154,7 +170,8 @@
     function resetBall() {
       ballX = canvas.width / 2;
       ballY = canvas.height / 2;
-      ballSpeedX = -ballSpeedX; // Send ball to the scoring side.
+      // Reverse ball direction so it moves toward the player who conceded a point.
+      ballSpeedX = -ballSpeedX;
     }
     
     function draw() {
@@ -175,15 +192,13 @@
       ctx.fill();
     }
     
-    // Keyboard controls for player's paddle. Uses up/down arrow keys.
+    // Keyboard controls for player's paddle.
     window.addEventListener("keydown", (e) => {
       const step = 20;
       if (e.key === "ArrowUp") {
-        playerY -= step;
-        if (playerY < 0) playerY = 0;
+        playerY = Math.max(playerY - step, 0);
       } else if (e.key === "ArrowDown") {
-        playerY += step;
-        if (playerY + paddleHeight > canvas.height) playerY = canvas.height - paddleHeight;
+        playerY = Math.min(playerY + step, canvas.height - paddleHeight);
       }
     });
     
@@ -202,7 +217,7 @@
     // How many pixels to move per interval.
     const movementPerInterval = (continuousSpeed * mobileButtonInterval) / 1000;
     
-    // Single tap event for touch buttons (moves paddle by 10 pixels).
+    // Single tap event for touch buttons.
     document.getElementById("upButton").addEventListener("click", () => {
       playerY = Math.max(playerY - 10, 0);
     });
