@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multiplayer AI Poker Bluff</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #222;
+      color: #f1f1f1;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      position: relative;
+    }
+    #scoreboard {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #444;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      max-width: 250px;
+    }
+    #game {
+      margin-top: 60px;
+      max-width: 600px;
+      width: 90%;
+      padding: 20px;
+      background: #333;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #000;
+      text-align: center;
+    }
+    h1, h2, h3 {
+      margin-top: 0;
+    }
+    button {
+      margin: 10px 5px;
+      padding: 10px 15px;
+      border: none;
+      background: #555;
+      color: #f1f1f1;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    button:hover {
+      background: #666;
+    }
+    input[type="number"],
+    input[type="text"] {
+      padding: 5px;
+      font-size: 16px;
+      width: 60px;
+      text-align: center;
+    }
+    ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    li {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="scoreboard"></div>
+  <div id="game"></div>
+
+  <script>
+    // Global variables for game state
+    let players = [];
+    let currentPlayerIndex = 0;
+    let roundCount = 1;
+    let playerHand = 0;
+    let aiHand = 0;
+
+    // Setup screen: ask for number of players
+    function showSetupScreen() {
+      const gameDiv = document.getElementById("game");
+      gameDiv.innerHTML = `
+        <h1>Multiplayer AI Poker Bluff</h1>
+        <p>Enter number of players (2–4):</p>
+        <input id="numPlayers" type="number" min="2" max="4" value="2">
+        <br>
+        <button onclick="startGame()">Next</button>
+      `;
+      document.getElementById("scoreboard").innerHTML = "";
+    }
+
+    // After entering the number of players, show custom name inputs
+    function startGame() {
+      const num = parseInt(document.getElementById("numPlayers").value);
+      if (isNaN(num) || num < 2 || num > 4) {
+        alert("Please enter a valid number between 2 and 4.");
+        return;
+      }
+      showNameSetupScreen(num);
+    }
+
+    // Display inputs to allow players to enter their names
+    function showNameSetupScreen(num) {
+      const gameDiv = document.getElementById("game");
+      let inputsHTML = `<h1>Enter Player Names</h1>`;
+      for (let i = 1; i <= num; i++) {
+        inputsHTML += `
+          <p>
+            <label for="playerName${i}">Player ${i} Name: </label>
+            <input id="playerName${i}" type="text" placeholder="Player ${i}">
+          </p>
+        `;
+      }
+      inputsHTML += `<button onclick="initializePlayers(${num})">Start Game</button>`;
+      gameDiv.innerHTML = inputsHTML;
+    }
+
+    // Initialize the players array using entered names (or defaults)
+    function initializePlayers(num) {
+      players = [];
+      for (let i = 1; i <= num; i++) {
+        const nameInput = document.getElementById("playerName" + i);
+        let name = nameInput.value.trim();
+        if (name === "") {
+          name = "Player " + i;
+        }
+        players.push({ name: name, chips: 100, wins: 0, losses: 0 });
+      }
+      currentPlayerIndex = 0;
+      roundCount = 1;
+      updateScoreboard();
+      showTurnPrompt();
+    }
+
+    // Update the scoreboard at the top-right
+    function updateScoreboard() {
+      let scoreboardHTML = '<h3>Scoreboard</h3><ul>';
+      players.forEach(player => {
+        scoreboardHTML += `<li><strong>${player.name}</strong>: Chips: ${player.chips} | Wins: ${player.wins} | Losses: ${player.losses}</li>`;
+      });
+      scoreboardHTML += '</ul><p><strong>Scoring Guide:</strong><br>Call → 10 chips<br>Raise → 20 chips<br>Fold → Lose 5 chips</p>';
+      document.getElementById("scoreboard").innerHTML = scoreboardHTML;
+    }
+
+    // Prompt the current player to take their turn while enforcing "pass device"
+    function showTurnPrompt() {
+      // Remove players with zero or fewer chips
+      if (players[currentPlayerIndex].chips <= 0) {
+        players.splice(currentPlayerIndex, 1);
+        if (players.length < 2) {
+          showGameOver();
+          return;
+        }
+        currentPlayerIndex %= players.length;
+      }
+      if (players.length < 2) {
+        showGameOver();
+        return;
+      }
+      const gameDiv = document.getElementById("game");
+      gameDiv.innerHTML = `
+        <h2>${players[currentPlayerIndex].name}'s Turn</h2>
+        <p>Please hand the device to ${players[currentPlayerIndex].name}.</p>
+        <button onclick="beginTurn()">Begin Turn</button>
+      `;
+    }
+
+    // Begin the current player's round by generating hands and actions
+    function beginTurn() {
+      const gameDiv = document.getElementById("game");
+      gameDiv.innerHTML = `
+        <h2>${players[currentPlayerIndex].name}'s Round (Round ${roundCount})</h2>
+        <p>Chips: ${players[currentPlayerIndex].chips}</p>
+      `;
+      // Generate random hand values for the player and the AI (1–100)
+      playerHand = Math.floor(Math.random() * 100) + 1;
+      aiHand = Math.floor(Math.random() * 100) + 1;
+      
+      const playerDesc = getHandDescription(playerHand);
+      const aiBetMessage = getAIBetMessage(aiHand);
+      
+      gameDiv.innerHTML += `
+        <p>Your hand: <strong>${playerDesc}</strong></p>
+        <p>AI says: "${aiBetMessage}"</p>
+        <button onclick="playerAction('call')">Call</button>
+        <button onclick="playerAction('raise')">Raise</button>
+        <button onclick="playerAction('fold')">Fold</button>
+      `;
+    }
+
+    // Convert a numeric hand value to a descriptive text
+    function getHandDescription(value) {
+      if (value <= 30) return "Weak hand";
+      else if (value <= 60) return "Mediocre hand";
+      else if (value <= 80) return "Strong hand";
+      else return "Excellent hand";
+    }
+
+    // Generate an AI betting message based on its hidden hand value
+    function getAIBetMessage(value) {
+      if (value <= 30) return Math.random() < 0.7 ? "I bet 20 chips." : "I bet 10 chips.";
+      else if (value <= 60) return Math.random() < 0.5 ? "I bet 15 chips." : "I bet 10 chips.";
+      else if (value <= 80) return Math.random() < 0.5 ? "I bet 15 chips." : "I bet 10 chips.";
+      else return Math.random() < 0.5 ? "I bet 10 chips." : "I bet 5 chips.";
+    }
+
+    // Process the current player's action (call, raise, or fold)
+    function playerAction(action) {
+      const gameDiv = document.getElementById("game");
+      let outcomeMessage = "";
+      let chipChange = 0;
+      
+      if (action === "fold") {
+        chipChange = -5;
+        outcomeMessage = "You folded.";
+        players[currentPlayerIndex].losses++;
+      } else if (action === "call") {
+        if (playerHand >= aiHand) {
+          chipChange = 10;
+          outcomeMessage = "You called and won!";
+          players[currentPlayerIndex].wins++;
+        } else {
+          chipChange = -10;
+          outcomeMessage = "You called but lost.";
+          players[currentPlayerIndex].losses++;
+        }
+      } else if (action === "raise") {
+        if (playerHand >= aiHand) {
+          chipChange = 20;
+          outcomeMessage = "You raised and won!";
+          players[currentPlayerIndex].wins++;
+        } else {
+          chipChange = -20;
+          outcomeMessage = "You raised but lost badly.";
+          players[currentPlayerIndex].losses++;
+        }
+      }
+      
+      players[currentPlayerIndex].chips += chipChange;
+      roundCount++;
+      
+      updateScoreboard();
+      
+      gameDiv.innerHTML += `
+        <p>${outcomeMessage}</p>
+        <p>(Chip change: ${chipChange}, Total chips: ${players[currentPlayerIndex].chips})</p>
+        <p>Your hand was: <strong>${getHandDescription(playerHand)}</strong> (Value: ${playerHand})</p>
+        <p>AI's hand was: <strong>${getHandDescription(aiHand)}</strong> (Value: ${aiHand})</p>
+        <button onclick="passDevice()">Pass Device</button>
+      `;
+    }
+
+    // When a player finishes their turn, pass the device to the next valid player
+    function passDevice() {
+      currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+      showTurnPrompt();
+    }
+
+    // Show the game over screen when only one player remains
+    function showGameOver() {
+      const gameDiv = document.getElementById("game");
+      let winner;
+      if (players.length === 1) {
+        winner = players[0].name;
+      } else {
+        // Alternatively, choose the player with the most chips.
+        winner = players.reduce((prev, curr) => (prev.chips > curr.chips ? prev : curr)).name;
+      }
+      gameDiv.innerHTML = `
+        <h2>Game Over!</h2>
+        <p>The winner is <strong>${winner}</strong>!</p>
+        <button onclick="location.reload()">Restart Game</button>
+      `;
+    }
+
+    // Start with the number-of-players setup screen when the page loads
+    window.onload = showSetupScreen;
+  </script>
+</body>
+</html>
